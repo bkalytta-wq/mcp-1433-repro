@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mcp-1433-zone",
+  "account_id": "65c0e09fa5fa5c1fb9d8b429a9f08e11",
+  "compatibility_date": "2026-01-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/server.ts",
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    {
+      "pattern": "mcp-1433-test.bacarda.de",
+      "custom_domain": true
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "class_name": "DumpMCP",
+        "name": "DumpMCP"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "new_sqlite_classes": ["DumpMCP"],
+      "tag": "v1"
+    }
+  ]
+}

@@ -2,54 +2,70 @@
 
 Minimal Cloudflare Worker reproducer for [cloudflare/agents#1433](https://github.com/cloudflare/agents/issues/1433) — *"MCP streamable-HTTP transport: large JSON-RPC payloads (>16 KB) fail with TLS record_overflow due to header-encoding"*.
 
-> **Status (4 May 2026):** the bug is **live** on at least one deployment we own (`mcp.bacarda.de`, runs `agents@^0.11.9`, fails after 869 ms with `TLS Alert: level=2, description=22`). However it does **not** reproduce against any of the three branches in this repo when deployed to `*.bastian-enterprise.workers.dev` — including the exact same `agents@0.11.9` build. Conclusion: the differentiator is **deployment shape, not SDK version**. Custom zone / Cloudflare Access / codemode-client header surface are the next things to probe. Detail in [EVIDENCE.md](./EVIDENCE.md) on the `v0119` branch.
+> **Status (4 May 2026):** the bug is **live** on `mcp.bacarda.de` (private, `agents@^0.11.9`, fronted by Cloudflare Access — fails at 24 KB after 869 ms with `TLS Alert: level=2, description=22`). Across four parallel deployments in this repo (`0.11.9` / `0.12.3` / `pkg.pr.new/1434` on `*.workers.dev`, plus `0.11.9` on a **custom zone without Access**) we cannot trip `record_overflow` at any size up to 500 KB. SDK version is ruled out; custom zone alone is ruled out. **Cloudflare Access (added JWT/email headers) is now the leading suspect** — but Access App provisioning is blocked on the wrangler OAuth token's missing `access:edit` scope. Detail in [EVIDENCE.md](./EVIDENCE.md) on the `v0119` branch.
 
 ## What's in the repo
 
 | Branch | `agents` version | Worker name | URL |
 | --- | --- | --- | --- |
 | `main` | `agents@0.12.3` (npm, latest) | `mcp-1433-repro` | https://mcp-1433-repro.bastian-enterprise.workers.dev |
-| `v0119` | `agents@0.11.9` (npm, matches pka-mcp-hub pin) | `mcp-1433-repro-0119` | https://mcp-1433-repro-0119.bastian-enterprise.workers.dev |
+| `v0119` | `agents@0.11.9` (npm, matches pka-mcp-hub pin) | `mcp-1433-repro-0119` *(workers.dev)* + `mcp-1433-zone` *(custom zone, see below)* | https://mcp-1433-repro-0119.bastian-enterprise.workers.dev <br> https://mcp-1433-test.bacarda.de |
 | `fixed` | `pkg.pr.new/agents@1434` (PR #1434 build) | `mcp-1433-repro-fixed` | https://mcp-1433-repro-fixed.bastian-enterprise.workers.dev |
 
-All three contain identical `src/server.ts`, expose one MCP tool (`dump_content` taking `{ content: string }` and returning `{ length, sha256 }`), and live on the same Cloudflare account (`Bastian Enterprise`, `65c0e09fa5fa5c1fb9d8b429a9f08e11`). Only the `agents` package and the worker `name` differ between branches.
+The `v0119` branch ships **two** wrangler configs:
 
-## Three-way result on `*.workers.dev`
+- `wrangler.jsonc` → deploys to `mcp-1433-repro-0119.bastian-enterprise.workers.dev` (no zone, no Access)
+- `wrangler-zone.jsonc` → deploys the **same source** to `mcp-1433-test.bacarda.de` as `mcp-1433-zone` (custom zone, no Access). Use `npx wrangler deploy --config wrangler-zone.jsonc`.
 
-| `agents` version | 24 KB | 65 KB | 200 KB | 500 KB |
+All deployments live on the same Cloudflare account (`Bastian Enterprise`, `65c0e09fa5fa5c1fb9d8b429a9f08e11`) and run identical `src/server.ts`.
+
+## Four-way result
+
+| Deployment | 24 KB | 65 KB | 200 KB | 500 KB |
 | --- | --- | --- | --- | --- |
-| `0.11.9` (npm) | ✓ 365 ms | ✓ 667 ms | ✓ 715 ms | ✓ 568 ms |
-| `0.12.3` (npm) | ✓ 379 ms | ✓ 326 ms | ✓ 381 ms | ✓ 566 ms |
-| `pkg.pr.new/agents@1434` | ✓ 751 ms | ✓ 452 ms | ✓ 452 ms | — |
+| `0.11.9` on `*.workers.dev` | ✓ 365 ms | ✓ 667 ms | ✓ 715 ms | ✓ 568 ms |
+| `0.12.3` on `*.workers.dev` | ✓ 379 ms | ✓ 326 ms | ✓ 381 ms | ✓ 566 ms |
+| `pkg.pr.new/1434` on `*.workers.dev` | ✓ 751 ms | ✓ 452 ms | ✓ 452 ms | — |
+| **`0.11.9` on `mcp-1433-test.bacarda.de`** *(zone, no Access)* | **✓ 962 ms** | **✓ 511 ms** | **✓ 796 ms** | **✓ 727 ms** |
+| `0.11.9` on `mcp.bacarda.de` *(zone + Access — pka-mcp-hub)* | ✗ **869 ms** | — | — | — |
 
-The base64-encoded `cf-mcp-message` header path is provably present in both `0.11.9` and `0.12.3` (`dist/mcp/index.js:160`) yet neither trips `record_overflow` on `*.workers.dev`.
-
-## Counter-data (where the bug *does* fire)
-
-`pka_memory.create` against `mcp.bacarda.de` (private, `agents@^0.11.9`, same CF account) with `content="A".repeat(24576)` — `TLS Alert: level=2, description=22` (record_overflow, fatal) after **869 ms**. So the bug is real and triggered by *something* about that deployment that this minimal repo does not replicate. Most likely candidates:
-
-- the request travels through a **custom zone** (`bacarda.de`) rather than the `workers.dev` shortcut, and edge header limits / TLS handling differ on the zone path
-- **Cloudflare Access** sits in front and adds large headers (`cf-access-jwt-assertion` etc.) that push the combined-header total past the limit even at smaller `cf-mcp-message` sizes
-- the **codemode** MCP client used to call pka-mcp-hub serializes the JSON-RPC payload differently than `@modelcontextprotocol/sdk`'s streamable-HTTP transport
+The base64 `cf-mcp-message` header path is byte-identical in `0.11.9` and `0.12.3` (`dist/mcp/index.js:160`). The four passing rows all contain it; the one failing row contains it too. Differentiator is **not** the SDK version, **not** the zone path. Remaining candidates: **Cloudflare Access** (added headers) and **codemode client** (different request shape than `@modelcontextprotocol/sdk`).
 
 ## Repro
 
 ```bash
 git clone https://github.com/bkalytta-wq/mcp-1433-repro
 cd mcp-1433-repro
+git checkout v0119            # broadest test surface
 npm install
-node repro.mjs https://mcp-1433-repro.bastian-enterprise.workers.dev/mcp 24576
-# repeat with v0119 / fixed URLs to match the table above
+node repro.mjs https://mcp-1433-test.bacarda.de/mcp 24576
+# repeat with each URL from the table above
 ```
 
-To deploy your own copy, change `account_id` in `wrangler.jsonc` and run `npx wrangler deploy`. Each branch deploys to its own worker name.
+For Access-protected endpoints, `repro.mjs` reads two optional env vars:
+
+```bash
+export CF_ACCESS_CLIENT_ID=<service-token-id>.access
+export CF_ACCESS_CLIENT_SECRET=<service-token-secret>
+node repro.mjs https://your-access-protected-endpoint/mcp 24576
+```
+
+## Deploying your own copy
+
+Edit `account_id` in `wrangler.jsonc` (and `wrangler-zone.jsonc` on `v0119`) to your own. For zone deployment, also change the `routes[].pattern`. Then:
+
+```bash
+npx wrangler deploy                                # workers.dev
+npx wrangler deploy --config wrangler-zone.jsonc   # custom zone
+```
 
 ## Files
 
 - `src/server.ts` — `McpAgent` Durable Object exposing `dump_content`
-- `wrangler.jsonc` — deploy config, DO migration; only the `name` changes per branch
-- `repro.mjs` — Node driver using `@modelcontextprotocol/sdk` streamable-HTTP client; explicit `record_overflow` detection in the error path
-- `EVIDENCE.md` *(only on `v0119` branch)* — full three-way data, suggested follow-up probes
+- `wrangler.jsonc` — workers.dev deploy
+- `wrangler-zone.jsonc` *(only on `v0119`)* — custom-zone deploy
+- `repro.mjs` — Node driver using `@modelcontextprotocol/sdk` streamable-HTTP client; supports `CF_ACCESS_CLIENT_ID/SECRET` env vars; explicit `record_overflow` detection
+- `EVIDENCE.md` *(only on `v0119`)* — full A/B/C/D data, hypothesis status, blocked-step notes for Test B
 
 ## License
 

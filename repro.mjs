@@ -7,6 +7,11 @@
  *   [content-size-bytes]   default 24576 (24 KiB) — large enough to overflow
  *                          the cf-mcp-message header on the Worker→DO hop.
  *
+ * Optional Cloudflare Access service-token auth (set both env vars):
+ *   CF_ACCESS_CLIENT_ID=<id>.access
+ *   CF_ACCESS_CLIENT_SECRET=<secret>
+ * When set, both headers are forwarded on every request via custom fetch.
+ *
  * Exits 0 on tools/call success, 1 on any failure (incl. TLS record_overflow).
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -21,12 +26,34 @@ if (!url) {
 }
 
 const content = "A".repeat(size);
+const accessId = process.env.CF_ACCESS_CLIENT_ID;
+const accessSecret = process.env.CF_ACCESS_CLIENT_SECRET;
+const accessHeaders =
+  accessId && accessSecret
+    ? {
+        "CF-Access-Client-Id": accessId,
+        "CF-Access-Client-Secret": accessSecret
+      }
+    : undefined;
 
 console.log(`→ target:  ${url}`);
 console.log(`→ payload: content=${size} bytes ('A' repeated)`);
+if (accessHeaders) console.log("→ auth:    CF Access service-token (headers attached)");
 console.log("");
 
-const transport = new StreamableHTTPClientTransport(new URL(url));
+const transportOpts = accessHeaders
+  ? {
+      requestInit: { headers: accessHeaders },
+      // The MCP SDK uses a separate fetch for SSE; pre-bind the headers there too.
+      fetch: (u, init) =>
+        fetch(u, {
+          ...init,
+          headers: { ...(init?.headers ?? {}), ...accessHeaders }
+        })
+    }
+  : undefined;
+
+const transport = new StreamableHTTPClientTransport(new URL(url), transportOpts);
 const client = new Client(
   { name: "mcp-1433-repro-driver", version: "0.0.0" },
   { capabilities: {} }
