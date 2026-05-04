@@ -7,10 +7,14 @@
  *   [content-size-bytes]   default 24576 (24 KiB) — large enough to overflow
  *                          the cf-mcp-message header on the Worker→DO hop.
  *
- * Optional Cloudflare Access service-token auth (set both env vars):
- *   CF_ACCESS_CLIENT_ID=<id>.access
- *   CF_ACCESS_CLIENT_SECRET=<secret>
- * When set, both headers are forwarded on every request via custom fetch.
+ * Optional Cloudflare Access auth (pick one):
+ *   1) Service-token mode — set both:
+ *        CF_ACCESS_CLIENT_ID=<id>.access
+ *        CF_ACCESS_CLIENT_SECRET=<secret>
+ *   2) Interactive (user-identity) JWT mode — set:
+ *        CF_AUTHORIZATION_JWT=<long jwt from CF_Authorization cookie after browser login>
+ *      (the JWT alone is sent as `cf-access-jwt-assertion` AND as the
+ *       `Cookie: CF_Authorization=...` header — both forms accepted by Access.)
  *
  * Exits 0 on tools/call success, 1 on any failure (incl. TLS record_overflow).
  */
@@ -28,28 +32,39 @@ if (!url) {
 const content = "A".repeat(size);
 const accessId = process.env.CF_ACCESS_CLIENT_ID;
 const accessSecret = process.env.CF_ACCESS_CLIENT_SECRET;
-const accessHeaders =
-  accessId && accessSecret
-    ? {
-        "CF-Access-Client-Id": accessId,
-        "CF-Access-Client-Secret": accessSecret
-      }
-    : undefined;
+const accessJwt = process.env.CF_AUTHORIZATION_JWT;
+
+let accessHeaders;
+let accessMode;
+if (accessJwt) {
+  accessHeaders = {
+    "cf-access-jwt-assertion": accessJwt,
+    Cookie: `CF_Authorization=${accessJwt}`
+  };
+  accessMode = `interactive JWT (${accessJwt.length} bytes)`;
+} else if (accessId && accessSecret) {
+  accessHeaders = {
+    "CF-Access-Client-Id": accessId,
+    "CF-Access-Client-Secret": accessSecret
+  };
+  accessMode = "service-token";
+}
 
 console.log(`→ target:  ${url}`);
 console.log(`→ payload: content=${size} bytes ('A' repeated)`);
-if (accessHeaders) console.log("→ auth:    CF Access service-token (headers attached)");
+if (accessMode) console.log(`→ auth:    CF Access ${accessMode}`);
 console.log("");
 
 const transportOpts = accessHeaders
   ? {
       requestInit: { headers: accessHeaders },
-      // The MCP SDK uses a separate fetch for SSE; pre-bind the headers there too.
-      fetch: (u, init) =>
-        fetch(u, {
-          ...init,
-          headers: { ...(init?.headers ?? {}), ...accessHeaders }
-        })
+      // The MCP SDK passes its own Headers / Accept etc. through `init.headers`.
+      // Use the Headers API to merge so we never clobber Accept/Content-Type.
+      fetch: (u, init) => {
+        const merged = new Headers(init?.headers ?? {});
+        for (const [k, v] of Object.entries(accessHeaders)) merged.set(k, v);
+        return fetch(u, { ...init, headers: merged });
+      }
     }
   : undefined;
 
