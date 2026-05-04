@@ -1,0 +1,25 @@
+README.md
+  53a1bd27e0499f35 5,9,12-13,17-18,20,22,29-32,34,36-39,46,52,55,58-59,65,77-78
+repro.mjs
+  53a1bd27e0499f35 10-17,35-51,55,61-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "5352bbebae2fce3d3e2e32776f4e57eef4f4f6ec",
+  "prompts": {
+    "53a1bd27e0499f35": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_20db875e1ffervw1lQj8pC0oYk",
+        "model": "anthropic/claude-opus-4-7"
+      },
+      "human_author": "Bastian Kalytta",
+      "messages": [],
+      "total_additions": 59,
+      "total_deletions": 34,
+      "accepted_lines": 59,
+      "overriden_lines": 0
+    }
+  }
+}
