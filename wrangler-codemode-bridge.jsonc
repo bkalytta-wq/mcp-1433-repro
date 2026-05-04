@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mcp-1433-repro-codemode-bridge",
+  "account_id": "65c0e09fa5fa5c1fb9d8b429a9f08e11",
+  "compatibility_date": "2026-01-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "src/server-codemode-bridge.ts",
+  "observability": { "enabled": true },
+  "worker_loaders": [{ "binding": "LOADER" }],
+  "services": [
+    { "binding": "UPSTREAM", "service": "mcp-1433-repro-hono" }
+  ]
+}

@@ -11,6 +11,7 @@
     "repro": "node repro.mjs"
   },
   "dependencies": {
+    "@cloudflare/codemode": "^0.3.4",
     "@modelcontextprotocol/sdk": "1.29.0",
     "agents": "0.11.9",
     "hono": "^4.12.16",

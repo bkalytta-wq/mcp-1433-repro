@@ -5,9 +5,17 @@
   "compatibility_date": "2026-01-28",
   "compatibility_flags": ["nodejs_compat"],
   "main": "src/server-hono.ts",
+  "workers_dev": true,
+  "preview_urls": true,
   "observability": {
     "enabled": true
   },
+  "routes": [
+    {
+      "pattern": "mcp-1433-hono.bacarda.de",
+      "custom_domain": true
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {
