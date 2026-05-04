@@ -44,13 +44,12 @@ console.log("");
 const transportOpts = accessHeaders
   ? {
       requestInit: { headers: accessHeaders },
-      // The MCP SDK passes its own Headers / Accept etc. through `init.headers`.
-      // Use the Headers API to merge so we never clobber Accept/Content-Type.
-      fetch: (u, init) => {
-        const merged = new Headers(init?.headers ?? {});
-        for (const [k, v] of Object.entries(accessHeaders)) merged.set(k, v);
-        return fetch(u, { ...init, headers: merged });
-      }
+      // The MCP SDK uses a separate fetch for SSE; pre-bind the headers there too.
+      fetch: (u, init) =>
+        fetch(u, {
+          ...init,
+          headers: { ...(init?.headers ?? {}), ...accessHeaders }
+        })
     }
   : undefined;
 
