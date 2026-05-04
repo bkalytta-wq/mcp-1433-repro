@@ -7,14 +7,12 @@
  *   [content-size-bytes]   default 24576 (24 KiB) — large enough to overflow
  *                          the cf-mcp-message header on the Worker→DO hop.
  *
- * Optional Cloudflare Access auth (pick one):
- *   1) Service-token mode — set both:
- *        CF_ACCESS_CLIENT_ID=<id>.access
- *        CF_ACCESS_CLIENT_SECRET=<secret>
- *   2) Interactive (user-identity) JWT mode — set:
- *        CF_AUTHORIZATION_JWT=<long jwt from CF_Authorization cookie after browser login>
- *      (the JWT alone is sent as `cf-access-jwt-assertion` AND as the
- *       `Cookie: CF_Authorization=...` header — both forms accepted by Access.)
+ * Optional auth env vars (any combination — they stack):
+ *   - MCP_BEARER_TOKEN=<token>            → adds `Authorization: Bearer <token>`
+ *   - CF_ACCESS_CLIENT_ID=<id>.access     ┐  service-token Cloudflare Access
+ *   - CF_ACCESS_CLIENT_SECRET=<secret>    ┘
+ *   - CF_AUTHORIZATION_JWT=<long jwt>     → interactive Access JWT mode,
+ *       sent as `cf-access-jwt-assertion` AND `Cookie: CF_Authorization=...`
  *
  * Exits 0 on tools/call success, 1 on any failure (incl. TLS record_overflow).
  */
@@ -33,6 +31,7 @@ const content = "A".repeat(size);
 const accessId = process.env.CF_ACCESS_CLIENT_ID;
 const accessSecret = process.env.CF_ACCESS_CLIENT_SECRET;
 const accessJwt = process.env.CF_AUTHORIZATION_JWT;
+const bearerToken = process.env.MCP_BEARER_TOKEN;
 
 let accessHeaders;
 let accessMode;
@@ -48,6 +47,10 @@ if (accessJwt) {
     "CF-Access-Client-Secret": accessSecret
   };
   accessMode = "service-token";
+}
+if (bearerToken) {
+  accessHeaders = { ...(accessHeaders ?? {}), Authorization: `Bearer ${bearerToken}` };
+  accessMode = accessMode ? `${accessMode} + Bearer` : "Bearer";
 }
 
 console.log(`→ target:  ${url}`);
