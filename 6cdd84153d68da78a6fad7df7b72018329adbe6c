@@ -1,0 +1,27 @@
+EVIDENCE.md
+  53a1bd27e0499f35 1,3-4,7,11-17,32-40,42-43,45,47-50,52-53,56-59,62-109,112-154
+README.md
+  53a1bd27e0499f35 5,9,12-13,17-18,20,22,29-32,34,36-39,46,52,55,58-59,65,77-78
+repro.mjs
+  53a1bd27e0499f35 10-17,35-51,55,61-67
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "6cdd84153d68da78a6fad7df7b72018329adbe6c",
+  "prompts": {
+    "53a1bd27e0499f35": {
+      "agent_id": {
+        "tool": "opencode",
+        "id": "ses_20db875e1ffervw1lQj8pC0oYk",
+        "model": "anthropic/claude-opus-4-7"
+      },
+      "human_author": "Bastian Kalytta",
+      "messages": [],
+      "total_additions": 189,
+      "total_deletions": 117,
+      "accepted_lines": 189,
+      "overriden_lines": 0
+    }
+  }
+}
