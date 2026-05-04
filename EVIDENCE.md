@@ -1,5 +1,28 @@
 # Evidence — A through I test for cloudflare/agents#1433
 
+> **Update — Stage 2 (4 May 2026, after this document was first written):** the
+> `DEBUG_HEADERS=1`-gated middleware on `mcp.bacarda.de` was actually deployed
+> and the smoking-gun probe was run.
+>
+> - Direct `curl POST` to `mcp.bacarda.de/mcp` with the same 24 KB body and the
+>   same Bearer token: **200 OK in 384 ms** (Worker handler runs, app-level
+>   rejection).
+> - Through the Cloudflare One MCP Server Portal to the same endpoint with the
+>   same body: **TLS Alert level=2 desc=22 in 731 ms** (Worker handler never
+>   invoked).
+> - Threshold via Portal: **16 KB raw passes, 18 KB raw fails reliably**
+>   (`record_overflow`).
+>
+> The bug is real and is the buggy `cf-mcp-message` base64-header path in
+> agents-sdk. It trips in the Portal Worker → Portal DO hop because Portal
+> carries ~6–8 KB more internal header state than a plain Worker, which is why
+> the cliff hits at ~18 KB content instead of the ~24 KB you'd predict from
+> base64 inflation alone. PR #1434 fixes this for everyone — Portal included —
+> by moving the body off the header path. See README for the full updated story.
+>
+> The rest of this document is preserved as the historical Stage-1 walk-down
+> through hypotheses H0–H5 + the codemode bridge ruling out H3.
+
 All deployments live on the same Cloudflare account
 (`Bastian Enterprise`, `65c0e09fa5fa5c1fb9d8b429a9f08e11`), and all run
 identical `DumpMCP` source on identical `McpAgent` Durable Objects. The
