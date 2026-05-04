@@ -1,0 +1,23 @@
+{
+  "name": "mcp-1433-repro",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Minimal repro for cloudflare/agents#1433 — large MCP payloads >16KB fail with TLS record_overflow",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "deploy:fixed": "wrangler deploy --name mcp-1433-repro-fixed",
+    "types": "wrangler types env.d.ts --include-runtime false",
+    "repro": "node repro.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.29.0",
+    "agents": "0.12.3",
+    "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260429.1",
+    "typescript": "^5.6.3",
+    "wrangler": "^4.38.0"
+  }
+}

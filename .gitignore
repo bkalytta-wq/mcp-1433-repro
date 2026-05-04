@@ -1,0 +1,9 @@
+node_modules/
+.wrangler/
+.dev.vars
+.dev.vars.*
+*.log
+dist/
+.DS_Store
+env.d.ts
+COMMENT_DRAFT.md
